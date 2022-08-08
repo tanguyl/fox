@@ -1,0 +1,4 @@
+_build/
+priv/
+rebar.lock
+debug.txt
