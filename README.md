@@ -16,8 +16,8 @@ The addition, substraction, multiplication, division operators are supported: ('
 ```erlang
 Two   = fox:apply_op('+', 1, 1),
 Three = fox:apply_op('-', Big, Two),
-Four = fox:apply_op('/', Big, 2),
-Five = fox:apply_op('*', Big, Big).
+Four  = fox:apply_op('/', Big, 2),
+Five  = fox:apply_op('*', Big, Big).
 ```
 
 # Broadcasting
