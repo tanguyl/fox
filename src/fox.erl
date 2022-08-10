@@ -1,6 +1,6 @@
 -module(fox).
 -on_load(init/0).
--export([array/1, apply_op/3, array/2, array_to_atom/1]).
+-export([array/1, apply_op/3, array/2, array_to_atom/1, eval/1]).
 
 init()->
   Dir = case code:priv_dir(fox) of
@@ -44,5 +44,16 @@ apply_op(Op, Lhs, Rhs) ->
 
 apply_nif(_,_,_)->
   erlang:nif_error("Nif library was not loaded.").
+
+
+%Input: an expression combining atom/operations: 'b*c+d'.
+eval([Op, Lhs_raw, Rhs_raw | Rem])->
+  [Lhs, Rhs] = lists:map(fun(I)-> case I of [O,_,_] when is_atom(O)-> eval(I); _ -> I end end, [Lhs_raw, Rhs_raw]),
+  if is_atom(Rhs)->
+    eval([Op, Lhs] ++ [eval([Rhs|Rem])]);
+  true ->
+    apply_op(Op, Lhs, Rhs)
+  end.
+
 
 
