@@ -12,6 +12,7 @@ Matrix  = fox:array(lists:seq(1,6), [2,3]).   % [[1,2,3], [4,5,6]].
 Matrix2 = fox:array([[1,2], [3,4]]).          % [[1,2],[3,4]]. 
 ```
 The ```erlang fun array/1``` accept for arguments
+* a nested list of number
 * a list of number, creating a ndarray of single dimension
 * a number, creating a ndarray of a single value
 
