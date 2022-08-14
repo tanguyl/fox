@@ -5,10 +5,10 @@ A ndarray library for Erlang.
 Arrays are represented using binaries. They can be created as such:
 
 ```erlang
-One     = fox:array(1),                       % One:   [1.0].
-Two     = fox:array([2]),                     % Two:   [2.0].
+One     = fox:array(1),                       % One:    [1.0].
+Two     = fox:array([2]),                     % Two:    [2.0].
 Vector  = fox:array([1,2,3]),                 % Vector: [1.0, 2.0, 3.0]
-Matrix  = fox:array(lists:seq(1,6), [2,3]).   % Matrix:   [[1,2,3], [4,5,6]].
+Matrix  = fox:array(lists:seq(1,6), [2,3]).   % Matrix: [[1,2,3], [4,5,6]].
 ```
 The ``` fun array/1``` accept for arguments
 * a list of number, creating a ndarray of single dimension
@@ -47,8 +47,8 @@ Power           = fox:apply_op('pow', Matrix, -1).
 # Combining operations
  The eval function can be used to combine multiple operations, evaluated left to right. Each operation is expressed 
  under the format ``` [Lhs, Op, Rhs] ```.
- *``` Lhs``` and ```  Rhs``` are compatible ndarrays or operations producing compatible ndarrays
- *``` Op``` is one of the atoms showcased [here](https://github.com/tanguyl/fox/edit/main/README.md#operations).
+ * ``` Lhs``` and ```  Rhs``` are compatible ndarrays or operations producing compatible ndarrays
+ * ``` Op``` is one of the atoms showcased [here](https://github.com/tanguyl/fox#operations).
 ```erlang
 fox:eval([1,'+', 1, '*', 2, '/', 4]).              % ((1+1)*2)/4
 fox:eval([ [3,'*', 4], '+', [2, '*', Vector]]).    %  (3*4) + (2*[1,2,3])
