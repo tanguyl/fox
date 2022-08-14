@@ -46,14 +46,10 @@ apply_nif(_,_,_)->
   erlang:nif_error("Nif library was not loaded.").
 
 
-%Input: an expression combining atom/operations: 'b*c+d'.
-eval([Op, Lhs_raw, Rhs_raw | Rem])->
-  [Lhs, Rhs] = lists:map(fun(I)-> case I of [O,_,_] when is_atom(O)-> eval(I); _ -> I end end, [Lhs_raw, Rhs_raw]),
-  if is_atom(Rhs)->
-    eval([Op, Lhs] ++ [eval([Rhs|Rem])]);
-  true ->
-    apply_op(Op, Lhs, Rhs)
+%Input: an expression combining atom/operations: '['*', B, C]'.
+eval([Lhs_raw, Op, Rhs_raw | Rem])->
+  [Lhs, Rhs] = lists:map(fun(I)-> case I of [_,O,_] when is_atom(O)-> eval(I); _ -> I end end, [Lhs_raw, Rhs_raw]),
+  case Rem of 
+      [Rem_op|_] when is_atom(Rem_op) -> eval([Lhs, Op] ++ [eval([Rhs|Rem])]);
+      _ -> apply_op(Op, Lhs, Rhs)
   end.
-
-
-

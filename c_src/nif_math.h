@@ -139,6 +139,12 @@ void op_div(array lhs, array rhs, array dest, int n_elem){
     }
 }
 
+void op_pow(array lhs, array rhs, array dest, int n_elem){
+    for(int i = 0; i<n_elem; i++){
+        dest.content[i*dest.stride[dest.n_dims-1]] = pow(lhs.content[i*lhs.stride[lhs.n_dims-1]], rhs.content[i*rhs.stride[rhs.n_dims-1]]);
+    }
+}
+
 typedef struct {
     char* name;
     void(*fct)(array, array, array, int);
@@ -149,6 +155,7 @@ op operations[] = {
     {"-", op_sub},
     {"*", op_mult},
     {"/", op_div},
+    {"^", op_pow},
     {"", NULL}
 };
 

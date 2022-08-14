@@ -33,3 +33,9 @@ F = numerl:apply_op('+', L,R).
 ```
 For N = 100, F is an array of shape [100, 100, 1].
 
+# Combining operations
+ The eval function can be used to combine multiple operations, evaluated left to rignt.
+```erlang
+fox:eval([1,'+', 1, '*', 2, '/', 4]).               % ((1+1)*2)/4
+fox:eval([ [3,'*', 4], '+', [2, '*', [1,2,3]]]).    %  (3*4) + (2*[1,2,3])
+```
