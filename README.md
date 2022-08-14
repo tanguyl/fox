@@ -47,9 +47,10 @@ Power           = fox:apply_op('pow', Matrix, -1).
 
 # Combining operations
  The eval function can be used to combine multiple operations, evaluated left to right. Each operation is expressed 
- under the format ```erlang [Lhs, Op, Rhs] ```; ```erlang  Lhs``` and ```erlang  Rhs``` being compatible ndarrays
- or nested operation, ```erlang  Op``` being an atom
+ under the format ``` [Lhs, Op, Rhs] ```.
+ * ``` Lhs``` and ```  Rhs``` are compatible ndarrays or operations producing compatible ndarrays
+ * ``` Op``` is one of the atoms showcased [here](https://github.com/tanguyl/fox#operations).
 ```erlang
-fox:eval([1,'+', 1, '*', 2, '/', 4]).               % ((1+1)*2)/4
+fox:eval([1,'+', 1, '*', 2, '/', 4]).              % ((1+1)*2)/4
 fox:eval([ [3,'*', 4], '+', [2, '*', Vector]]).    %  (3*4) + (2*[1,2,3])
 ```
