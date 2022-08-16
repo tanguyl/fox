@@ -1,6 +1,6 @@
 -module(fox).
 -on_load(init/0).
--export([array/1, apply_op/3, array/2, array_to_atom/1, eval/1]).
+-export([array/1, array/2, to_lists/1, op/2]).
 
 init()->
   Dir = case code:priv_dir(fox) of
@@ -14,14 +14,23 @@ init()->
     SoName = filename:join(Dir, atom_to_list(?MODULE)),
     erlang:load_nif(SoName, 0).
 
-%Input: list of ints/floats.
-%Output: binary of contiguous doubles.
+
 array(Content, Shape)->
-    Array = [length(Content), length(Shape)] ++ Shape ++ Content,
-    build_array(Array).
+  ExpectedSize = lists:foldr(fun (X, Prod)->X*Prod end, 1, Shape),
+  ActualSize   = lists:flatlength(Content),
+  if ActualSize =/= ExpectedSize ->
+    erlang:error("Shape mismatch content.");
+  true ->
+    {Strides,_} = lists:mapfoldr(fun(H,Acc)-> {Acc, H*Acc} end, 1, Shape), 
+    {
+      lists:foldl(fun(H,Acc)-> <<Acc/binary, H:64/native-float>>   end, <<>>, Content),   % Binary of content
+      lists:foldl(fun(H,Acc)-> <<Acc/binary, H:32/native-integer>> end, <<>>,   Shape),   % Binary of Shape
+      lists:foldl(fun(H,Acc)-> <<Acc/binary, H:32/native-integer>> end, <<>>, Strides)    % Binary of Strides
+    }
+  end.
 
 array(Content)   when is_number(Content) -> array([Content], [1]);
-array(Content)   when is_list(Content) ->
+array(Content)   when is_list(Content)   ->
   ExtractDim = fun Extract(L, Shapes)  -> 
                    case L of
                      I when is_number(I) -> lists:reverse(Shapes);
@@ -36,33 +45,15 @@ array(Content)   when is_list(Content) ->
       erlang:error('Input list is of incorrect dimensions');
     true ->
       array(lists:flatten(Content), Shapes)
-end.
-
-build_array(_)->
-  erlang:nif_error("Nif library was not loaded.").
-
-%Input: an array.
-%Output: a str representation of the array.
-array_to_atom(_)->
-  erlang:nif_error("Nif library was not loaded.").
-
-
-
-%Input: two ndarrays A,B
-%Output: ndarray C = A + B
-apply_op(Op, Lhs, Rhs) when not is_binary(Lhs) -> apply_op(Op, array(Lhs), Rhs);
-apply_op(Op, Lhs, Rhs) when not is_binary(Rhs) -> apply_op(Op, Lhs, array(Rhs));
-apply_op(Op, Lhs, Rhs) ->
-   apply_nif(Op, Lhs, Rhs).
-
-apply_nif(_,_,_)->
-  erlang:nif_error("Nif library was not loaded.").
-
-
-%Input: an expression combining atom/operations: '['*', B, C]'.
-eval([Lhs_raw, Op, Rhs_raw | Rem])->
-  [Lhs, Rhs] = lists:map(fun(I)-> case I of [_,O,_] when is_atom(O)-> eval(I); _ -> I end end, [Lhs_raw, Rhs_raw]),
-  case Rem of 
-      [Rem_op|_] when is_atom(Rem_op) -> eval([Lhs, Op] ++ [eval([Rhs|Rem])]);
-      _ -> apply_op(Op, Lhs, Rhs)
   end.
+
+
+
+btd(<<H:64/native-float, T/binary>>,   Acc) -> btd(T, [H|Acc]);btd(_, Acc) -> lists:reverse(Acc).
+bti(<<H:32/native-integer, T/binary>>, Acc) -> bti(T, [H|Acc]);bti(_, Acc) -> lists:reverse(Acc).
+
+to_lists({Content, Shape, Strides})->
+  {btd(Content, []), bti(Shape, []), bti(Strides, [])}.
+
+op(_,_)->
+  nif_not_loaded.
