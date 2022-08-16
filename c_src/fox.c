@@ -1,8 +1,8 @@
 #include "nif_utils.h"
 
 /*
-Arity: 1
-Inputs:     List of ints/doubles.
+Arity: 2
+Inputs:     List of ints/doubles (content), list of shapes.
 Outputs:    A binary version of the array.
 */
 ERL_NIF_TERM nif_array(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
@@ -96,7 +96,7 @@ ERL_NIF_TERM nif_array_to_atom(ErlNifEnv* env, int argc, const ERL_NIF_TERM* arg
 }
 
 
-ERL_NIF_TERM nif_add(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
+ERL_NIF_TERM apply_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
 
     ErlNifBinary lhs_bin, rhs_bin;
     char op_str[2];
@@ -164,7 +164,7 @@ ERL_NIF_TERM nif_add(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
 ErlNifFunc nif_funcs[] = {
     {"build_array", 1, nif_array},
     {"array_to_atom", 1, nif_array_to_atom},
-    {"apply_nif", 3, nif_add}
+    {"apply_nif", 3, apply_op}
 };
 
 int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info){

@@ -20,10 +20,23 @@ array(Content, Shape)->
     Array = [length(Content), length(Shape)] ++ Shape ++ Content,
     build_array(Array).
 
-array(Content) 
-  when is_list(Content) -> array(Content, [length(Content)]);
-array(Content) when is_number(Content)->
-  array([Content], [1]).
+array(Content)   when is_number(Content) -> array([Content], [1]);
+array(Content)   when is_list(Content) ->
+  ExtractDim = fun Extract(L, Shapes)  -> 
+                   case L of
+                     I when is_number(I) -> lists:reverse(Shapes);
+                     [H | _ ]            -> Extract(H, [length(L)|Shapes])
+                   end
+               end,
+  Shapes = ExtractDim(Content, []),
+  ExpectedSize = lists:foldr(fun (X, Prod)->X*Prod end, 1, Shapes),
+  ActualSize = lists:flatlength(Content),
+  if 
+    ExpectedSize =/= ActualSize->
+      erlang:error('Input list is of incorrect dimensions');
+    true ->
+      array(lists:flatten(Content), Shapes)
+end.
 
 build_array(_)->
   erlang:nif_error("Nif library was not loaded.").

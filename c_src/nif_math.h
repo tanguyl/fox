@@ -114,6 +114,8 @@ int iterate(array_it *it){
 }
 
 
+
+
 void op_add(array lhs, array rhs, array dest, int n_elem){
     for(int i = 0; i<n_elem; i++){
         dest.content[i*dest.stride[dest.n_dims-1]] = lhs.content[i*lhs.stride[lhs.n_dims-1]] + rhs.content[i*rhs.stride[rhs.n_dims-1]];
