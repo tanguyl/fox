@@ -1,6 +1,6 @@
 -module(fox).
 -on_load(init/0).
--export([array/1, array/2, to_lists/1, op/2]).
+-export([array/1, array/2, to_lists/1, op/2, op/3]).
 
 init()->
   Dir = case code:priv_dir(fox) of
@@ -55,5 +55,15 @@ bti(<<H:32/native-integer, T/binary>>, Acc) -> bti(T, [H|Acc]);bti(_, Acc) -> li
 to_lists({Content, Shape, Strides})->
   {btd(Content, []), bti(Shape, []), bti(Strides, [])}.
 
-op(_,_)->
+op(Op, Rhs) when is_tuple(Rhs)-> op_nif(Op, Rhs);
+op(Op, Rhs) -> op_nif(Op, array(Rhs)).
+
+op_nif(_,_)->
+  nif_not_loaded.
+
+op(Op, Lhs, Rhs)->
+  [Lhs_f, Rhs_f] = lists:map(fun(I)-> if is_tuple(I)-> I; true-> array(I) end end, [Lhs, Rhs]),
+  op_nif(Op, Lhs_f, Rhs_f).
+
+op_nif(_,_,_)->
   nif_not_loaded.
