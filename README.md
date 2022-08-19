@@ -20,6 +20,14 @@ Alternatively,  ```erlang fun array/2 (Content, Shape)``` takes for arguments
 * Content, a list of number
 * Shape, a list of ints indicating the ndarray shape.
 
+# Basic operations
+The following operations perform a 1-to-1 transformation of input arrays: ```acos,acosh,asin,asinh,atan,atan2,atanh,ceil,cos,cosh,exp,floor,fmod,log,log10,log2,sin,sinh,sqrt,tan,tanh```
+
+They can be used trough the ```op/2``` function:
+```erlang
+R = fox:op("cos",Matrix).
+```
+
 # Broadcasting
 Operations can be broadacasted on array if their shapes are compatible: from right to left, their dimensions should be the same/either equal to one, the absence of a dimension being treated as a 1. For example:
 
