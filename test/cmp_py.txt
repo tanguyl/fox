@@ -12,15 +12,15 @@ NUMPY
 
 NUMPY VERSION
 import numpy as np
-Width,Height = 1000,1000
+N = 1000
 
 def gen() :
      X = np.array([1/4,0,0])
      Y = np.array([0,1/4,0])
      Z = np.array([0,0,1/4])
  
-     W = np.array(np.linspace(0, Width-1, Width)).reshape((Width, 1))
-     H = np.array(np.linspace(Height-1, 0, Height)).reshape((Height, 1, 1))
+     W = np.array(np.linspace(0, N-1, N)).reshape((N, 1))
+     H = np.array(np.linspace(N-1, 0, N)).reshape((N, 1, 1))
      return X*W + (Y*H+Z)
 
 
@@ -30,21 +30,21 @@ ERLANG VERSION
 
 
 Gen = 
-fun(Width, Height) -> 
+fun(N) -> 
     fun() -> 
         X = fox:array([1/4,0,0]),
         Y = fox:array([0,1/4,0]),
         Z = fox:array([0,0,1/4]),
     
-        W = fox:array(lists:seq(0, Width-1, 1), [Width, 1]),
-        H = fox:array(lists:seq(Height-1, 0, -1), [Height, 1, 1]),
+        W = fox:array(lists:seq(0, N-1, 1), [N, 1]),
+        H = fox:array(lists:seq(N-1, 0, -1), [N, 1, 1]),
     
-        fox:apply_op('+',fox:apply_op('*', X, W), fox:apply_op('+', Z,fox:apply_op('*', Y,H))) 
+        fox:op("add",fox:op("mult", X, W), fox:op("add", Z,fox:op("mult", Y,H))) 
     end
 end.
     
 Time = fun(N)->
-    F = Gen(N,N),
+    F = Gen(N),
     {Result, _} = timer:tc(F),
     Result/1000000
 end.

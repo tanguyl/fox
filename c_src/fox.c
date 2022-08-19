@@ -27,7 +27,7 @@ ERL_NIF_TERM op(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
 }
 
 
-ErlNifFunc nif_funcs[] = { {"op_nif", 2, op}, {"op_nif", 3, op}};
+ErlNifFunc nif_funcs[] = { {"op_nif", 2, op}, {"op_nif", 4, op}};
 
 int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info){
     debug_write("\nNew session\n-----------\n");
