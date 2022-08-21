@@ -2,7 +2,6 @@
 -on_load(init/0).
 -export([array/1, array/2, to_lists/1, btl_d/1, btl_i/1, ltb_d/1, ltb_i/1, op/2, op/3, op_nif/4, reduce/1, linspace/3]).
 
--record(array,{content,shape,dim}).
 
 init()->
   Dir = case code:priv_dir(fox) of
@@ -122,6 +121,7 @@ op(Op, Lhs, Rhs)->
   can_broadcast(lists:reverse(Lhs_shape), lists:reverse(Rhs_shape)),                                                    % Throws an error if incompatible shapes
   [Res_shape, Lhs_padded, Rhs_padded]   = map_n(fun lists:max/1, 1, [Lhs_shape, Rhs_shape]),                              % Calculate output shape, pad inputs shapes
   [Lhs_shape_c, Rhs_shape_c]            = concat_right(Lhs_padded, Rhs_padded),                                           % Concatenate input shapes
+  io:format("Compacted shapes are ~w ~w ~n", [Lhs_shape_c, Rhs_shape_c]),
   [Res_shape_c,_,_]                     = map_n(fun lists:max/1, 1, [Lhs_shape_c, Rhs_shape_c]),                          % Calculate output corresponding shape
 
   [Dest_f, Lhs_f, Rhs_f] = [                                                                                            %Make modified array "nif ready"     

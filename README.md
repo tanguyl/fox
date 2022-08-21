@@ -53,3 +53,8 @@ Division        = fox:apply_op('/',   Matrix, Vector),
 Multiplication  = fox:apply_op('*',   Matrix, Matrix),
 Power           = fox:apply_op('pow', Matrix, -1).
 ```
+
+# Todo
+Broadcasting: simplify operations on shapes of type [X,1] [Y,Z]: currently looping on Z.
+Reduce:       correct
+Slice:        implement
