@@ -1,6 +1,6 @@
 -module(fox).
 -on_load(init/0).
--export([array/1, array/2, to_lists/1, op/2, op/3, op_nif/4]).
+-export([array/1, array/2, to_lists/1, btl_d/1, btl_i/1, ltb_d/1, ltb_i/1, op/2, op/3, op_nif/4, reduce/1, linspace/3]).
 
 -record(array,{content,shape,dim}).
 
@@ -36,15 +36,15 @@ strides_of(Shape)->
   Strides.
 
 %Create an array.
-array(Content, Shape)->
+array(Content, Shape) when is_list(Content)-> array(ltb_d(Content),Shape);
+array(Content, Shape) ->
   ExpectedSize = lists:foldr(fun (X, Prod)->X*Prod end, 1, Shape),
-  ActualSize   = lists:flatlength(Content),
+  ActualSize   = floor(bit_size(Content)/64),
   if ActualSize =/= ExpectedSize ->
     erlang:error("Shape mismatch content.");
   true ->
-    {ltb_d(Content), ltb_i(Shape), ltb_i(strides_of(Shape))}
+    {Content, ltb_i(Shape), ltb_i(strides_of(Shape))}
   end.
-
 array(Content)   when is_number(Content) -> array([Content], [1]);
 array(Content)   when is_list(Content)   ->
   ExtractDim = fun Extract(L, Shapes)  -> 
@@ -61,9 +61,8 @@ array(Content)   when is_list(Content)   ->
       erlang:error('Input list is of incorrect dimensions');
     true ->
       array(lists:flatten(Content), Shapes)
-  end.
-
-
+  end;
+array(Content)   when is_binary(Content) -> array(Content, [floor(bit_size(Content)/64)]).
 to_lists({Content, Shape, Strides})->
   {btl_d(Content), btl_i(Shape), btl_i(Strides)}.
 
@@ -135,4 +134,23 @@ op(Op, Lhs, Rhs)->
 
 
 op_nif(_,_,_,_)->
+  nif_not_loaded.
+
+reduce(A) when not is_tuple(A)-> reduce(array(A));
+reduce(A)->
+  [Shapes, Strides] = lists:map(fun(I)->btl_i(I)end, [element(2,A), element(3,A)]),
+  N = length(Shapes),
+  [Shape, Stride]   = lists:map(fun(I)->lists:nth(N,I)end, [Shapes, Strides]),
+  
+  {reduce_nif(element(1,A), Stride, Shape), ltb_i([Shape]), ltb_i([1])}.
+  
+
+reduce_nif(_,_,_)->
+  nif_not_loaded.
+
+%Produce a binary contaning Num doubles, evenly spaced on the range [Start, Stop[.
+linspace(Start,Stop,Num)->
+  linspace_nif(float(Start),float(Stop),trunc(Num)).
+
+linspace_nif(_,_,_)->
   nif_not_loaded.

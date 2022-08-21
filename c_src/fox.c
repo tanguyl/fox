@@ -26,8 +26,64 @@ ERL_NIF_TERM op(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
     return exception(env, "Could not find operation %s", name);
 }
 
+double reduce_op(double* source, int stride, int shape){
+    double result=0;
+    for(int i = 0; i < shape; i++)
+        result += source[stride*i];
+    
+    return result;
+}
 
-ErlNifFunc nif_funcs[] = { {"op_nif", 2, op}, {"op_nif", 4, op}};
+ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
+    ErlNifBinary b_in, b_out;
+    int stride, shape;
+
+    if(!enif_inspect_binary(env, argv[0], &b_in)
+        || !enif_get_int(env, argv[1], &stride)
+        || !enif_get_int(env, argv[2], &shape)
+        || !enif_alloc_binary(sizeof(double)*stride, &b_out))
+        return exception(env, "Could not read inputs");
+
+    double* source = (double*)b_in.data; 
+    double* dest   = (double*)b_out.data;
+
+    for(int offset=0; offset<stride; offset++)
+        for(int i=0; i<shape; i++)
+            dest[offset] = reduce_op(source, stride, shape);
+
+    return enif_make_binary(env, &b_out);
+}
+
+ERL_NIF_TERM linspace(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
+    double start, stop;
+    int num;
+    ErlNifBinary res_bin;
+
+    if(!enif_get_double(env,argv[0],&start)
+        || !enif_get_double(env,argv[1],&stop)
+        || !enif_get_int(env, argv[2], &num)
+        || !enif_alloc_binary(sizeof(double)*num, &res_bin))
+        return enif_make_badarg(env);
+
+    double* dest = (double*) res_bin.data;
+    dest[0] = start;
+    if (num>1){
+        double delta = (stop-start)/((double)num-1);
+        int step;
+        double val;
+        for(step=1,val=start+delta; step<num; step++, val+=delta)
+        dest[step] = val;
+    }
+    
+    return enif_make_binary(env, &res_bin);
+}
+
+ErlNifFunc nif_funcs[] = { 
+    {"op_nif", 2, op},
+    {"op_nif", 4, op},
+    {"reduce_nif", 3, reduce},
+    {"linspace_nif",3, linspace}
+};
 
 int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info){
     debug_write("\nNew session\n-----------\n");
