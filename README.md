@@ -13,7 +13,7 @@ The ```erlang fun array/1``` accept for arguments
 * a binary, creating a single dimension ndarray.
 
 Alternatively,  ```erlang fun array/2 (Content, Shape)``` takes for arguments
-* Content, a list of number
+* Content, a number | list of number | binary of ³floats
 * Shape, a list of ints indicating the ndarray shape.
 
 Finally, the function ```fun linspace/3(Start, Stop, Nsamples)``` can be used to create a binary usable as a an array's content field faster then ```fun lists:seq```.
@@ -63,7 +63,7 @@ T = fox:op("tan", fox:linspace(0,3.141,4)).
 
 # Binary ops
 ## Broadcasting
-Operations can be broadacasted on array if their shapes are compatible: from right to left, their dimensions should be the same/either equal to one, the absence of a dimension is treated as a 1. See a detailed example from  [numpy] (https://numpy.org/doc/stable/user/basics.broadcasting.html).
+Operations can be broadacasted on array if their shapes are compatible: from right to left, their dimensions should be the same/either equal to one, the absence of a dimension is treated as a 1. See a detailed example from  [numpy](https://numpy.org/doc/stable/user/basics.broadcasting.html).
 
 ```erlang
 N = 100,
