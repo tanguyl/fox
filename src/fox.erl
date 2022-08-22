@@ -1,6 +1,6 @@
 -module(fox).
 -on_load(init/0).
--export([btl/2, ltb/2, array/1, array/2, cast_array/2, linspace/3, op/2, op/3, reduce/1]).%, op/3, op_nif/4]).
+-export([btl/2, ltb/2, array/1, array/2, cast_array/2, linspace/3, op/2, op/3, reduce/1]).
 
 
 -type int_seq()::    <<_:1, _:_*32>> | [pos_integer(), ...] | pos_integer().  % How a list of ints can be represented.
@@ -158,7 +158,7 @@ reduce(A)->
   A_shape_e   = element(3, cast_array(A,erlang)),
   Res_shape_e =  lists:sublist(A_shape_e, length(A_shape_e)-1) ++ [1], 
   Res_c       = cast_array({array, <<>>, Res_shape_e, gen_strides(Res_shape_e)}, c),
-  
+
   Res_c#array{content=reduce_nif(Res_c, cast_array(A,c))}.
 
 reduce_nif(_, _)->
