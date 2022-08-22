@@ -128,8 +128,9 @@ linspace_nif(_,_,_)->
   nif_not_loaded.
 
 % Perform operation Op.
-op(Op, {array, Content, Shape, _})->
-  {array, op_nif(Op, ltb(Content,d)), Shape, gen_strides(Shape)}.
+op(Op, A)->
+  A_c = cast_array(A, c),
+  A_c#array{content=op_nif(Op, element(2,A_c))}.
 
 op_nif(_,_)->
   throw("Nif not loaded.").
