@@ -1,0 +1,119 @@
+
+
+
+% Creates an array that can be read in C.
+-spec array(double_seq(), int_seq())-> array().
+
+array(Content, Shape)->
+  Content = if is_binary(Content)->Content; true->ltb(Content,d) end,
+  Shape   = if is_binary(Shape)->Shape; true->ltb(Shape,d) end,
+
+%Create an array.
+array(Content, Shape) when is_list(Content)-> array(ltb_d(Content),Shape);
+array(Content, Shape) ->
+  ExpectedSize = lists:foldr(fun (X, Prod)->X*Prod end, 1, Shape),
+  ActualSize   = floor(bit_size(Content)/64),
+  if ActualSize =/= ExpectedSize ->
+    erlang:error("Shape mismatch content.");
+  true ->
+    {Content, ltb_i(Shape), ltb_i(strides_of(Shape))}
+  end.
+array(Content)   when is_number(Content) -> array([Content], [1]);
+array(Content)   when is_list(Content)   ->
+  ExtractDim = fun Extract(L, Shapes)  -> 
+                   case L of
+                     I when is_number(I) -> lists:reverse(Shapes);
+                     [H | _ ]            -> Extract(H, [length(L)|Shapes])
+                   end
+               end,
+  Shapes = ExtractDim(Content, []),
+  ExpectedSize = lists:foldr(fun (X, Prod)->X*Prod end, 1, Shapes),
+  ActualSize = lists:flatlength(Content),
+  if 
+    ExpectedSize =/= ActualSize->
+      erlang:error('Input list is of incorrect dimensions');
+    true ->
+      array(lists:flatten(Content), Shapes)
+  end;
+array(Content)   when is_binary(Content) -> array(Content, [floor(bit_size(Content)/64)]).
+
+to_lists({Content, Shape, Strides})->
+  {btl_d(Content), btl_i(Shape), btl_i(Strides)}.
+
+
+
+
+%Produce a binary contaning Num doubles, evenly spaced on the range [Start, Stop[.
+linspace(Start,Stop,Num)->
+  linspace_nif(float(Start),float(Stop),trunc(Num)).
+
+linspace_nif(_,_,_)->
+  nif_not_loaded.
+
+
+
+%Throw an error if input lists cannot be broadcasted together.
+check_broadcast(Lhs, Rhs)->
+  case {Lhs, Rhs} of
+    {_,[]} -> true;
+    {[],_} -> true:
+    {[L|Lt], [R|Rt]} when L==R; L==1; R==1 ->
+      can_broadcast(Lt,Rt);
+    _ -> throw("Cannot broadcast shapes together").
+
+% Merge multiple arrays into a single one.
+% Input lists are padded left with Padding.
+% Fct takes as input the list of current heads, return the wished value.
+% Returns a list: [MergedList, PaddedList1, ...]
+map_n(Fct, Padding, Lists)->
+  Max_size     = lists:max(lists:map(fun length/1, Lists)),
+  Lists_padded = lists:map(
+                            fun Pad(I)-> if length(I) < Max_size -> Pad([Padding|I]); true->I end end,
+                            Lists
+                          ),
+
+  Work         =  fun F( [[]|_] ) -> [];
+                      F(It_lists) -> [Fct(lists:map(fun hd/1, It_lists)) | F(lists:map(fun tl/1, It_lists))]
+                  end,
+
+  [Work(Lists_padded) | Lists_padded].
+
+% A bit more to study here!
+concat_right(Lhs, Rhs)->
+  [Lhs_r, Rhs_r] = lists:map(fun lists:reverse/1, [Lhs, Rhs]),
+  Concat         =  
+                    fun F([], [], Lacc, Racc, _) -> [[Lacc], [Racc]];
+                        F([H|Lt], [H|Rt], Acc, Acc, Dir)->
+                          F(Lt, Rt, H*Acc, H*Acc, Dir);
+                        F([1|Lt], [Rh|Rt], Lacc, Racc, Dir) when Dir==left;Dir==center->
+                          F(Lt, Rt, Lacc, Rh*Racc, left);
+                        F([Lh|Lt], [1|Rt], Lacc, Racc, Dir) when Dir==right;Dir==center->
+                          F(Lt, Rt, Lh*Lacc, Racc, right);
+                        F(L, R, Lacc, Racc, center)->
+                            [lists:reverse([hd(L)*Lacc |tl(L)]), lists:reverse( [hd(R)*Racc |tl(R)])];
+                        F(L, R, Lacc, Racc, _)->
+                            [lists:reverse([Lacc|L]), lists:reverse([Racc|R])]
+                    end,
+  Concat(Lhs_r, Rhs_r, 1, 1, center).
+
+op(Op, Lhs, Rhs)->
+  %TODO: check input compatibility
+  [Lhs_a, Rhs_a]                        = lists:map(fun(I)-> if is_tuple(I)-> I; true-> array(I) end end, [Lhs, Rhs]),  % Make sure inputs are arrays
+  [Lhs_shape, Rhs_shape]                = lists:map(fun(I)->btl_i(element(2,I))end, [Lhs_a, Rhs_a]),                    % Extract shape into a "easy to read" format
+  check_broadcast(lists:reverse(Lhs_shape), lists:reverse(Rhs_shape)),                                                  % Throws an error if incompatible shapes
+  [Res_shape, Lhs_padded, Rhs_padded]   = map_n(fun lists:max/1, 1, [Lhs_shape, Rhs_shape]),                            % Calculate output shape, pad inputs shapes
+  [Lhs_shape_c, Rhs_shape_c]            = concat_right(Lhs_padded, Rhs_padded),                                         % Concatenate input shapes
+  io:format("Compacted shapes are ~w ~w ~n", [Lhs_shape_c, Rhs_shape_c]),
+  [Res_shape_c,_,_]                     = map_n(fun lists:max/1, 1, [Lhs_shape_c, Rhs_shape_c]),                        % Calculate output corresponding shape
+
+  [Dest_f, Lhs_f, Rhs_f] = [                                                                                            %Make modified array "nif ready"     
+                        {<<>>,             ltb_i(Res_shape_c), ltb_i(strides_of(Res_shape_c))},
+                        {element(1,Lhs_a), ltb_i(Lhs_shape_c), ltb_i(strides_of(Lhs_shape_c))},
+                        {element(1,Rhs_a), ltb_i(Rhs_shape_c), ltb_i(strides_of(Rhs_shape_c))}
+                    ],
+
+  {op_nif(Op, Dest_f, Lhs_f, Rhs_f), ltb_i(Res_shape), ltb_i(strides_of(Res_shape))}.
+
+
+op_nif(_,_,_,_)->
+  nif_not_loaded.

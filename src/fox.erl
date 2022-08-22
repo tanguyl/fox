@@ -1,7 +1,14 @@
 -module(fox).
 -on_load(init/0).
--export([array/1, array/2, to_lists/1, btl_d/1, btl_i/1, ltb_d/1, ltb_i/1, op/2, op/3, op_nif/4, reduce/1, linspace/3]).
+-export([btl/2, ltb/2, array/1, array/2, cast_array/2, linspace/3, op/2, op/3]).%, op/3, op_nif/4]).
 
+
+-type int_seq()::    <<_:1, _:_*32>> | [pos_integer(), ...] | pos_integer().  % How a list of ints can be represented.
+-type double_seq():: <<_:1, _:_*64>> | [number()     , ...] | number().       % How a list of doubles can be represented.
+-type num_seq()::int_seq()|double_seq().
+
+-record(array,{content::double_seq(), shape::int_seq(), stride::int_seq()}).
+-type array()::#array{}.
 
 init()->
   Dir = case code:priv_dir(fox) of
@@ -17,140 +24,135 @@ init()->
 
 
 
-% Transfer lists from/to binaries/lists
-%---------------------------------------------------------------------------------------------------
-% Binary to list of double/ints
-btl_d(B)->btl_d(B,[]).
-btl_d(<<H:64/native-float, T/binary>>,   Acc) -> btl_d(T, [H|Acc]);btl_d(_, Acc) -> lists:reverse(Acc).
-btl_i(B)->btl_i(B,[]).
-btl_i(<<H:32/native-integer, T/binary>>, Acc) -> btl_i(T, [H|Acc]);btl_i(_, Acc) -> lists:reverse(Acc).
-
-% Lists of numbers to binaries of doubles/ints.
-ltb_d(L)->lists:foldl(fun(H,Acc)-> <<Acc/binary, H:64/native-float>>   end, <<>>, L).
-ltb_i(L)->lists:foldl(fun(H,Acc)-> <<Acc/binary, H:32/native-integer>> end, <<>>, L).
-
-% Array creation utilities
-strides_of(Shape)->
-  {Strides,_} = lists:mapfoldr(fun(H,Acc)-> {Acc, H*Acc} end, 1, Shape),
-  Strides.
-
-%Create an array.
-array(Content, Shape) when is_list(Content)-> array(ltb_d(Content),Shape);
-array(Content, Shape) ->
-  ExpectedSize = lists:foldr(fun (X, Prod)->X*Prod end, 1, Shape),
-  ActualSize   = floor(bit_size(Content)/64),
-  if ActualSize =/= ExpectedSize ->
-    erlang:error("Shape mismatch content.");
-  true ->
-    {Content, ltb_i(Shape), ltb_i(strides_of(Shape))}
+% Handle transfer of list to binaries/binaries to lists.
+-type c_number()::i|d.
+-spec btl(num_seq(), c_number()) -> [number()].
+btl(B,T)->
+  case B of
+    L when is_list(L)   -> B;
+    N when is_number(N) -> [B];
+    _ ->
+      case T of 
+        d -> F = fun F(<<>>)->[]; F(<<H:64/native-float,   Tl/binary>>) -> [H|F(Tl)] end, F(B);
+        i -> F = fun F(<<>>)->[]; F(<<H:32/native-integer, Tl/binary>>) -> [H|F(Tl)] end, F(B);
+        _ -> throw("Invalid argument: expected i or d")
+      end
   end.
-array(Content)   when is_number(Content) -> array([Content], [1]);
-array(Content)   when is_list(Content)   ->
-  ExtractDim = fun Extract(L, Shapes)  -> 
-                   case L of
-                     I when is_number(I) -> lists:reverse(Shapes);
-                     [H | _ ]            -> Extract(H, [length(L)|Shapes])
-                   end
-               end,
-  Shapes = ExtractDim(Content, []),
-  ExpectedSize = lists:foldr(fun (X, Prod)->X*Prod end, 1, Shapes),
-  ActualSize = lists:flatlength(Content),
-  if 
-    ExpectedSize =/= ActualSize->
-      erlang:error('Input list is of incorrect dimensions');
-    true ->
-      array(lists:flatten(Content), Shapes)
-  end;
-array(Content)   when is_binary(Content) -> array(Content, [floor(bit_size(Content)/64)]).
-to_lists({Content, Shape, Strides})->
-  {btl_d(Content), btl_i(Shape), btl_i(Strides)}.
 
-op(Op, {Rhs,Shape,Stride})-> {op_nif(Op, Rhs), Shape, Stride};
-op(Op, Rhs) -> 
-  {Content,Shape,Stride} = array(Rhs),
-  {op_nif(Op, Content), Shape, Stride}.
-
-op_nif(_,_)->
-  nif_not_loaded.
+-spec ltb(num_seq(), c_number()) -> binary().
+ltb(L,T)->
+  case L of
+    B when is_binary(B) -> B;
+    I when is_number(I) -> ltb([I],T);
+    _ ->
+    case T of 
+      d -> lists:foldl(fun(H,Acc)-> <<Acc/binary, H:64/native-float>>   end, <<>>, L);
+      i -> lists:foldl(fun(H,Acc)-> <<Acc/binary, H:32/native-integer>> end, <<>>, L);
+      _ -> throw("Invalid argument: expected i or d")
+    end
+  end.
 
 
-%Throw an error if input lists cannot be broadcasted together.
-can_broadcast(_,[])-> true;
-can_broadcast([],_)->true;
-can_broadcast([L|Lt], [R|Rt]) when L==R; L==1; R==1-> can_broadcast(Lt,Rt).
-
-% Merge multiple arrays into a single one.
-% Input lists are padded left with Padding.
-% Fct takes as input the list of current heads, return the wished value.
-% Returns a list: [MergedList, PaddedList1, ...]
-map_n(Fct, Padding, Lists)->
-  Max_size     = lists:max(lists:map(fun length/1, Lists)),
-  Lists_padded = lists:map(
-                            fun Pad(I)-> if length(I) < Max_size -> Pad([Padding|I]); true->I end end,
-                            Lists
-                          ),
-
-  Work         =  fun F( [[]|_] ) -> [];
-                      F(It_lists) -> [Fct(lists:map(fun hd/1, It_lists)) | F(lists:map(fun tl/1, It_lists))]
-                  end,
-
-  [Work(Lists_padded) | Lists_padded].
-
-% A bit more to study here!
-concat_right(Lhs, Rhs)->
-  [Lhs_r, Rhs_r] = lists:map(fun lists:reverse/1, [Lhs, Rhs]),
-  Concat         =  
-                    fun F([], [], Lacc, Racc, _) -> [[Lacc], [Racc]];
-                        F([H|Lt], [H|Rt], Acc, Acc, Dir)->
-                          F(Lt, Rt, H*Acc, H*Acc, Dir);
-                        F([1|Lt], [Rh|Rt], Lacc, Racc, Dir) when Dir==left;Dir==center->
-                          F(Lt, Rt, Lacc, Rh*Racc, left);
-                        F([Lh|Lt], [1|Rt], Lacc, Racc, Dir) when Dir==right;Dir==center->
-                          F(Lt, Rt, Lh*Lacc, Racc, right);
-                        F(L, R, Lacc, Racc, center)->
-                            [lists:reverse([hd(L)*Lacc |tl(L)]), lists:reverse( [hd(R)*Racc |tl(R)])];
-                        F(L, R, Lacc, Racc, _)->
-                            [lists:reverse([Lacc|L]), lists:reverse([Racc|R])]
-                    end,
-  Concat(Lhs_r, Rhs_r, 1, 1, center).
-
-op(Op, Lhs, Rhs)->
-  %TODO: check input compatibility
-  [Lhs_a, Rhs_a]                        = lists:map(fun(I)-> if is_tuple(I)-> I; true-> array(I) end end, [Lhs, Rhs]),  % Make sure inputs are arrays
-  [Lhs_shape, Rhs_shape]                = lists:map(fun(I)->btl_i(element(2,I))end, [Lhs_a, Rhs_a]),                    % Extract shape into a "easy to read" format
-  can_broadcast(lists:reverse(Lhs_shape), lists:reverse(Rhs_shape)),                                                    % Throws an error if incompatible shapes
-  [Res_shape, Lhs_padded, Rhs_padded]   = map_n(fun lists:max/1, 1, [Lhs_shape, Rhs_shape]),                              % Calculate output shape, pad inputs shapes
-  [Lhs_shape_c, Rhs_shape_c]            = concat_right(Lhs_padded, Rhs_padded),                                           % Concatenate input shapes
-  io:format("Compacted shapes are ~w ~w ~n", [Lhs_shape_c, Rhs_shape_c]),
-  [Res_shape_c,_,_]                     = map_n(fun lists:max/1, 1, [Lhs_shape_c, Rhs_shape_c]),                          % Calculate output corresponding shape
-
-  [Dest_f, Lhs_f, Rhs_f] = [                                                                                            %Make modified array "nif ready"     
-                        {<<>>,             ltb_i(Res_shape_c), ltb_i(strides_of(Res_shape_c))},
-                        {element(1,Lhs_a), ltb_i(Lhs_shape_c), ltb_i(strides_of(Lhs_shape_c))},
-                        {element(1,Rhs_a), ltb_i(Rhs_shape_c), ltb_i(strides_of(Rhs_shape_c))}
-                    ],
-
-  {op_nif(Op, Dest_f, Lhs_f, Rhs_f), ltb_i(Res_shape), ltb_i(strides_of(Res_shape))}.
+% Creates stride array.
+-spec gen_strides(int_seq())-> int_seq().
+gen_strides(Shape)->
+  case Shape of
+    L when is_list(L) -> 
+      {Strides,_} = lists:mapfoldr(fun(H,Acc)-> {Acc, H*Acc} end, 1, Shape),
+      Strides;
+    B when is_binary(B) ->
+      % Failed to to it directly with a binary
+      ltb(gen_strides(btl(B, i)), i);
+    N when is_number(N) ->
+      [1];
+    _ ->
+      io:format("Input ~w ", [Shape]),
+      throw("Unknown input")
+    end.
 
 
-op_nif(_,_,_,_)->
-  nif_not_loaded.
+% Creates an array that can be read in C.
+-spec array(double_seq(), int_seq())-> array().
+array(Content, Shape)->
+  Content_bin = ltb(Content,d),
+  Shape_bin   = ltb(Shape,i),
+  Stride_bin  = ltb(gen_strides(Shape),i),
 
-reduce(A) when not is_tuple(A)-> reduce(array(A));
-reduce(A)->
-  [Shapes, Strides] = lists:map(fun(I)->btl_i(I)end, [element(2,A), element(3,A)]),
-  N = length(Shapes),
-  [Shape, Stride]   = lists:map(fun(I)->lists:nth(N,I)end, [Shapes, Strides]),
-  
-  {reduce_nif(element(1,A), Stride, Shape), ltb_i([Shape]), ltb_i([1])}.
-  
+  % Check size compatibility.
+  [Shape_left, Stride_left] = lists:map(fun (<<I:32/native-integer, _/binary>>)-> I end, [Shape_bin, Stride_bin]),
+  if not (bit_size(Content_bin)/64 == Stride_left*Shape_left) ->
+    throw("Content/shape pair of invalid size");
+  true->
+    {array,Content_bin,Shape_bin,Stride_bin}
+  end.
 
-reduce_nif(_,_,_)->
-  nif_not_loaded.
+-spec array(double_seq()|array()|number()) -> array().
+array(Content) ->
+  case Content of
+    N when is_number(N)       -> array(N,1);
+    B when is_binary(B)       -> array(B, floor(bit_size(Content)/64));
+    A when is_record(A,array) -> Content;
+    C when is_list(C)         -> %Supposed to be a list.
+      E = fun Extract(L, Shapes)  -> 
+            case L of
+              I when is_number(I) -> lists:reverse(Shapes);
+              [H | _ ]            -> Extract(H, [length(L)|Shapes])
+            end
+      end,
+      array(lists:flatten(Content), E(Content, []));
 
-%Produce a binary contaning Num doubles, evenly spaced on the range [Start, Stop[.
+    _ -> throw("Expected either a number, binary, array, or list")
+  end.
+
+
+-type array_rep() :: c|erlang|list.
+-spec cast_array(array() | double_seq(), array_rep()) -> array().
+cast_array(A, R)->
+  case A of
+    {array, Content, Shape, Stride} ->
+      case R of
+        c      -> {array, ltb(Content,d), ltb(Shape,i), ltb(Stride,i)}; %c:      only binaries
+        erlang -> {array, ltb(Content,d), btl(Shape,i), btl(Stride,i)}; %erlang: shape and stride are lists
+        list   -> {array, btl(Content,d), btl(Shape,i), btl(Stride,i)}; %list:  all are lists.
+        _      -> throw("Expected one of c, erlang, list")
+      end;
+    _ -> cast_array(array(A), R)
+  end.
+
+
+% Produce a binary contaning Num doubles, evenly spaced on the range [Start, Stop[.
 linspace(Start,Stop,Num)->
   linspace_nif(float(Start),float(Stop),trunc(Num)).
 
 linspace_nif(_,_,_)->
   nif_not_loaded.
+
+% Perform operation Op.
+op(Op, {array, Content, Shape, _})->
+  {array, op_nif(Op, ltb(Content,d)), Shape, gen_strides(Shape)}.
+
+op_nif(_,_)->
+  throw("Nif not loaded.").
+
+% merge right according to function Merge.
+merger(Merge,Lin,Rin) when is_list(Lin), is_list(Rin)->
+  [L,R] = lists:map(fun lists:reverse/1, [Lin, Rin]),
+  Merger = fun It(Lm, Rm)->
+    case {Lm,Rm} of
+      {[],Ri} -> Ri;
+      {Li,[]} -> Li;
+      {[Lh|Lt], [Rh|Rt]} -> [ Merge([Lh, Rh]) | It(Lt, Rt)]
+    end
+  end,
+  lists:reverse(Merger(L,R)).
+
+% Perform binary operation op.
+op(Op, Lhs, Rhs)->
+  {#array{shape=Lse}, #array{shape=Rse}} = {cast_array(Lhs, erlang), cast_array(Rhs, erlang)},           % Cast Lhs and Rhs to erlang readable
+  Res_shape  = merger(fun lists:max/1, Lse, Rse),
+  Dest_c     = cast_array({array, <<>>, Res_shape, gen_strides(Res_shape)}, c),
+  Dest_cont  = bin_op_nif(Op, Dest_c, cast_array(Lhs, c), cast_array(Rhs, c)),
+  Dest_c#array{content=Dest_cont}.
+
+bin_op_nif(_,_,_,_)->
+  throw("Nif not loaded").

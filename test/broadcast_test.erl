@@ -34,7 +34,7 @@ small_vectors_test()->
     B = fox:array([2,4]),
     B = fox:op("add",A,A).
 
-small_op_test()->
+small_op_tes()->
     A = fox:array([1]),
     B = fox:array([2]),
 

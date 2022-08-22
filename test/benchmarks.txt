@@ -1,0 +1,17 @@
+Gen_lin = fun(N) -> fox:linspace(1,N,N) end.
+Gen_seq = fun(N) -> lists:seq(1,N) end.
+    
+Bench = fun(Fcts, N) ->
+    lists:map(fun(Fct)->{Result, _} = timer:tc(Fct,[N]), Result/1000000 end, Fcts)
+end.
+
+Gen_cos = fun(N) -> fox:op("cos", fox:array(fox:linspace(1,N,N))) end.
+Bench([Gen_cos], 100000).
+
+Bench = fun(Fcts, N) ->
+    lists:map(fun(Fct)->{Result, _} = timer:tc(Fct,[N]), Result/1000000 end, Fcts)
+end.
+Gen_add = fun(N) -> A = fox:linspace(1,N,N), fox:op("add", A,A) end.
+Bench([Gen_add], 100000000).
+% for loop in caller nif [1.3]
+% for loop in operation  [0.5]
