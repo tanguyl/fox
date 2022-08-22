@@ -62,40 +62,48 @@ ERL_NIF_TERM bin_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
     
     dest.content = (double*) content_bin.data;
 
-    int iteration_size = dest.shape[dest.n_dims-1];
-    int cur_it[dest.n_dims];
-    memset(cur_it, 0, sizeof(int)*dest.n_dims);
-    int iterate = 1;
+    iterator it = alloc_iterator(dest, dest.shape_r);
 
-    array lhs_base = lhs, rhs_base = rhs, dest_base = dest;
-
-    while(iterate){
-        op->fct(dest, lhs, rhs, iteration_size);
-
-        //Apply iteration factor
-        if(dest.n_dims==1)
-            iterate = 0;
-        else{
-            cur_it[dest.n_dims-1] += iteration_size;
-            for(int i = dest.n_dims-1; i>=0; i--)
-                if(cur_it[i] >= dest.shape[i]){
-                    if(i==0)
-                        iterate = 0;
-                    else{
-                        cur_it[i]    = 0;
-                        cur_it[i-1] += 1;
-                    }
-                }
-            
-            // shift arrays
-            lhs = shift_array(lhs_base, cur_it, dest.n_dims);
-            rhs = shift_array(rhs_base, cur_it, dest.n_dims);
-            dest = shift_array(dest_base, cur_it, dest.n_dims);
-        }
-        
+    while(it.iterating){
+        op->fct(shift_array(lhs, it), shift_array(rhs, it), shift_array(dest, it), it.it_size);
+        iterate(&it);
     }
+    free_iterator(&it);
 
     return enif_make_binary(env, &content_bin);
+}
+
+
+double reduce_op(double* source, int stride, int shape){
+    double result = 0.0;
+    for(int i=0; i<shape; i++)
+        result += source[i*stride];
+    return result;
+}
+
+ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
+    ErlNifBinary b_out;
+    array lhs, res;
+    ERL_NIF_TERM error;
+
+    if((error = record_to_array(env, argv[0], &res))
+        || (error = record_to_array(env, argv[1], &lhs)))
+        return error;
+
+    if(!enif_alloc_binary(lhs.size/lhs.shape_r*sizeof(double), &b_out))
+        return exception(env, "Could not allocate memory");
+
+    res.content = (double*)b_out.data;
+
+    // Assuming we iterate on "rightmost" dimension
+    iterator it = alloc_iterator(lhs, lhs.shape_r);
+    while(it.iterating){
+        *((double*)shift_array(res, it).content) = reduce_op( (double*)shift_array(lhs, it).content, lhs.stride_r, lhs.shape_r);
+        iterate(&it);
+    }
+    free_iterator(&it);
+
+    return enif_make_binary(env, &b_out);
 }
 
 
@@ -124,9 +132,10 @@ ERL_NIF_TERM linspace(ErlNifEnv* env, int argc, const ERL_NIF_TERM* argv){
 }
 
 ErlNifFunc nif_funcs[] = { 
-    {"op_nif",          2,        op, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-    {"bin_op_nif",      4,    bin_op, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-    {"linspace_nif",    3,  linspace, ERL_NIF_DIRTY_JOB_CPU_BOUND}
+    {"op_nif",       2,        op, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    {"bin_op_nif",   4,    bin_op, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    {"reduce_nif",   2,    reduce, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    {"linspace_nif", 3,  linspace, ERL_NIF_DIRTY_JOB_CPU_BOUND}
 };
 
 int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info){
